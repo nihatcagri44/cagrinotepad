@@ -1,5 +1,10 @@
 /* Çağrı Notepad — tek sayfa, kendiliğinden kaydeden defter.
-   Bağımlılık yok. Veri tarayıcıdan çıkmaz. */
+   Bağımlılık yok. Veri tarayıcıdan çıkmaz.
+
+   Yazının animasyonlu belirmesi için metin iki katmanda yaşar: gerçek
+   <textarea> (saydam yazı, görünür imleç) ve onun arkasında birebir aynı
+   tipografiye sahip bir "ayna". Görünen harfler aynanın harfleridir; yeni
+   yazılanlar oraya kısa bir animasyonla eklenir.                            */
 
 (function () {
   'use strict';
@@ -12,14 +17,19 @@
     theme: NS + 'theme',
     font: NS + 'font',
     size: NS + 'size',
+    paper: NS + 'paper',
     lang: NS + 'lang'
   };
 
   var SAVE_DELAY = 300;      // yazma durduktan sonra diske yazma gecikmesi
   var BACKUP_EVERY = 60000;  // anlık kopya aralığı
   var STATUS_HIDE = 1800;    // "Kaydedildi" ne kadar ekranda kalsın
-  var UI_HIDE = 2600;        // araç çubuğu boşta ne kadar sonra sönsün
+  var UI_HIDE = 2600;        // çubuk boşta ne kadar sonra sönsün
   var ADOPT_GRACE = 2000;    // bu süre içinde yazdıysan başka sekmenin metnini alma
+  var INK_STAGGER = 16;      // harfler arası animasyon gecikmesi
+  var INK_MAX = 240;         // bundan uzun eklemeler (yapıştırma) animasyonsuz
+  var GHOST_SPEED = 26;      // karşılama yazısının daktilo hızı
+  var GHOST_DELAY = 320;
 
   var STR = {
     tr: {
@@ -28,7 +38,8 @@
       saved: 'Kaydedildi',
       error: 'Kaydedilemedi — metni indir',
       count: function (w, c) { return w + ' kelime · ' + c + ' karakter'; },
-      theme: 'Tema', font: 'Yazı tipi', smaller: 'Yazıyı küçült', bigger: 'Yazıyı büyüt',
+      theme: 'Tema', paper: 'Kağıt', font: 'Yazı tipi',
+      smaller: 'Yazıyı küçült', bigger: 'Yazıyı büyüt',
       download: 'Metni indir', restore: 'Yedeği geri yükle', lang: 'Dili değiştir',
       restoreAsk: function (t) {
         return t + ' tarihli yedek geri yüklensin mi?\nŞu anki metnin yerine geçecek.';
@@ -41,7 +52,8 @@
       saved: 'Saved',
       error: 'Could not save — download your text',
       count: function (w, c) { return w + ' words · ' + c + ' characters'; },
-      theme: 'Theme', font: 'Typeface', smaller: 'Smaller text', bigger: 'Larger text',
+      theme: 'Theme', paper: 'Paper', font: 'Typeface',
+      smaller: 'Smaller text', bigger: 'Larger text',
       download: 'Download text', restore: 'Restore backup', lang: 'Switch language',
       restoreAsk: function (t) {
         return 'Restore the backup from ' + t + '?\nIt will replace your current text.';
@@ -53,10 +65,15 @@
   var root = document.documentElement;
   var body = document.body;
   var editor = document.getElementById('editor');
+  var mirror = document.getElementById('mirror');
+  var ghost = document.getElementById('ghost');
+  var paper = document.getElementById('paper');
   var statusEl = document.getElementById('status');
   var countEl = document.getElementById('count');
+  var bar = document.querySelector('.bar');
   var btn = {
     theme: document.getElementById('t-theme'),
+    paper: document.getElementById('t-paper'),
     font: document.getElementById('t-font'),
     smaller: document.getElementById('t-smaller'),
     bigger: document.getElementById('t-bigger'),
@@ -67,8 +84,12 @@
 
   var lang = STR[root.lang] ? root.lang : 'tr';
   var t = STR[lang];
+  var calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
   var saveTimer = null, statusTimer = null, uiTimer = null;
-  var lastTypedAt = 0, lastBackup = null;
+  var flattenTimer = null, ghostTimer = null;
+  var lastTypedAt = 0, lastBackup = null, prevValue = '', padTop = 0;
+  var introPending = true;   // açılış daktilosu henüz başlamadı
 
   /* ---- Depolama ------------------------------------------------------- */
 
@@ -79,21 +100,140 @@
     } catch (e) { return fallback; }
   }
 
-  function write(key, value) {
+  function store(key, value) {
     try { localStorage.setItem(key, value); return true; }
     catch (e) { return false; }
+  }
+
+  /* ---- Ayna katmanı -----------------------------------------------------
+     from/to verilirse o aralıktaki harfler tek tek animasyonlu eklenir.    */
+
+  function paint(value, from, to) {
+    var frag = document.createDocumentFragment();
+
+    if (from == null) {
+      frag.appendChild(document.createTextNode(value + '\n'));
+    } else {
+      if (from > 0) frag.appendChild(document.createTextNode(value.slice(0, from)));
+      var i = from, n = 0;
+      while (i < to) {
+        var ch = String.fromCodePoint(value.codePointAt(i));
+        var span = document.createElement('span');
+        span.className = 'ink';
+        span.textContent = ch;
+        span.style.animationDelay = Math.min(n * INK_STAGGER, 320) + 'ms';
+        frag.appendChild(span);
+        i += ch.length;
+        n++;
+      }
+      /* Sondaki satır sonu, textarea'nın gösterdiği boş son satırı taklit eder;
+         olmazsa en alta kaydırınca satırlar bir satır kayar. */
+      frag.appendChild(document.createTextNode(value.slice(to) + '\n'));
+    }
+
+    mirror.replaceChildren(frag);
+    body.classList.add('mirrored');
+  }
+
+  /* Eski ve yeni metnin ortak ön/son ekini atıp eklenen aralığı bulur. */
+  function insertedRange(a, b) {
+    if (a === b) return null;
+    var min = Math.min(a.length, b.length);
+    var p = 0;
+    while (p < min && a.charCodeAt(p) === b.charCodeAt(p)) p++;
+    var s = 0;
+    while (s < min - p && a.charCodeAt(a.length - 1 - s) === b.charCodeAt(b.length - 1 - s)) s++;
+    var to = b.length - s;
+    return to > p ? [p, to] : null;   // saf silme ise animasyon yok
+  }
+
+  function flattenSoon(value, count) {
+    if (flattenTimer) clearTimeout(flattenTimer);
+    flattenTimer = setTimeout(function () {
+      flattenTimer = null;
+      if (editor.value === value) paint(value, null);
+    }, Math.min(count * INK_STAGGER, 320) + 260);
+  }
+
+  function refreshMirror(animate) {
+    var v = editor.value;
+    var range = animate && !calm ? insertedRange(prevValue, v) : null;
+
+    if (range && range[1] - range[0] <= INK_MAX) {
+      paint(v, range[0], range[1]);
+      flattenSoon(v, range[1] - range[0]);
+    } else {
+      if (flattenTimer) { clearTimeout(flattenTimer); flattenTimer = null; }
+      paint(v, null);
+    }
+
+    prevValue = v;
+    syncScroll();
+  }
+
+  function syncScroll() {
+    mirror.scrollTop = editor.scrollTop;
+    paper.style.backgroundPositionY = (padTop - editor.scrollTop) + 'px';
+  }
+
+  function measure() {
+    padTop = parseFloat(getComputedStyle(editor).paddingTop) || 0;
+    syncScroll();
+  }
+
+  /* ---- Karşılama yazısı --------------------------------------------------
+     Boş sayfada daktilo gibi yazılır; ilk tuşa basılınca kaybolur.         */
+
+  function ghostStop(clear) {
+    if (ghostTimer) { clearInterval(ghostTimer); ghostTimer = null; }
+    if (clear) ghost.replaceChildren();
+  }
+
+  function ghostShow(animate) {
+    ghostStop(true);
+    if (editor.value) return;
+
+    /* Açılış daktilosu beklerken sabit metni basma; yoksa önce tamamı
+       görünüp sonra sıfırlanıyor. */
+    if (!animate && introPending) return;
+
+    if (!animate || calm) {
+      ghost.textContent = t.placeholder;
+      return;
+    }
+
+    var text = document.createElement('span');
+    var caret = document.createElement('span');
+    caret.className = 'ghost-caret';
+    ghost.replaceChildren(text, caret);
+
+    var chars = Array.from(t.placeholder);
+    var i = 0;
+    ghostTimer = setInterval(function () {
+      if (i >= chars.length) {
+        ghostStop(false);
+        caret.remove();          // gerçek imleçle karışmasın
+        return;
+      }
+      text.textContent += chars[i++];
+    }, GHOST_SPEED);
   }
 
   /* ---- Kaydetme -------------------------------------------------------- */
 
   function commit() {
     saveTimer = null;
-    if (write(K.note, editor.value)) setStatus('saved', STATUS_HIDE);
+    if (store(K.note, editor.value)) setStatus('saved', STATUS_HIDE);
     else setStatus('error', 0);
   }
 
   function flush() {
     if (saveTimer) { clearTimeout(saveTimer); commit(); }
+  }
+
+  function flushNow() {
+    if (saveTimer) clearTimeout(saveTimer);
+    commit();
   }
 
   function schedule() {
@@ -125,8 +265,8 @@
   function takeBackup() {
     var v = editor.value;
     if (!v.trim() || v === lastBackup) return;
-    if (write(K.backup, v)) {
-      write(K.backupAt, String(Date.now()));
+    if (store(K.backup, v)) {
+      store(K.backupAt, String(Date.now()));
       lastBackup = v;
     }
     refreshRestore();
@@ -149,15 +289,12 @@
     flushNow();
   }
 
-  function flushNow() {
-    if (saveTimer) clearTimeout(saveTimer);
-    commit();
-  }
-
   function setText(v) {
     editor.value = v;
+    refreshMirror(false);
     updateCount();
     refreshRestore();
+    ghostShow(false);
   }
 
   /* ---- Tercihler -------------------------------------------------------- */
@@ -170,46 +307,47 @@
   function toggleTheme() {
     var next = effectiveTheme() === 'dark' ? 'light' : 'dark';
     root.dataset.theme = next;
-    write(K.theme, next);
+    store(K.theme, next);
   }
 
   var FONTS = ['sans', 'serif', 'mono'];
+  var PAPERS = ['plain', 'ruled', 'grid'];
 
-  function cycleFont() {
-    var i = FONTS.indexOf(root.dataset.font || 'sans');
-    var next = FONTS[(i + 1) % FONTS.length];
-    root.dataset.font = next;
-    write(K.font, next);
+  function cycle(list, attr, key) {
+    var i = list.indexOf(root.dataset[attr]);
+    var next = list[(i + 1) % list.length];
+    root.dataset[attr] = next;
+    store(key, next);
+    requestAnimationFrame(measure);
   }
 
   function stepSize(delta) {
     var cur = Number(root.dataset.size || 2);
     var next = Math.min(3, Math.max(1, cur + delta));
     root.dataset.size = String(next);
-    write(K.size, String(next));
+    store(K.size, String(next));
+    requestAnimationFrame(measure);
   }
 
   function toggleLang() {
     lang = lang === 'tr' ? 'en' : 'tr';
     t = STR[lang];
     root.lang = lang;
-    write(K.lang, lang);
+    store(K.lang, lang);
     applyLang();
   }
 
   function applyLang() {
-    editor.placeholder = t.placeholder;
     editor.setAttribute('aria-label', lang === 'tr' ? 'Not' : 'Note');
-    btn.theme.setAttribute('aria-label', t.theme);
-    btn.font.setAttribute('aria-label', t.font);
-    btn.smaller.setAttribute('aria-label', t.smaller);
-    btn.bigger.setAttribute('aria-label', t.bigger);
-    btn.download.setAttribute('aria-label', t.download);
-    btn.restore.setAttribute('aria-label', t.restore);
-    btn.lang.setAttribute('aria-label', t.lang);
+    for (var key in btn) {
+      if (btn[key] && t[key]) {
+        btn[key].setAttribute('aria-label', t[key]);
+        btn[key].title = t[key];
+      }
+    }
     btn.lang.textContent = lang === 'tr' ? 'EN' : 'TR';
-    for (var key in btn) if (btn[key]) btn[key].title = t[key] || '';
     updateCount();
+    ghostShow(false);
     if (statusEl.dataset.state) statusEl.textContent = t[statusEl.dataset.state] || '';
   }
 
@@ -235,19 +373,18 @@
       if (lines[i].trim()) { first = lines[i].trim(); break; }
     }
     var name = slug(first) || t.untitled;
-    var date = new Date().toISOString().slice(0, 10);
     var blob = new Blob([editor.value], { type: 'text/plain;charset=utf-8' });
     var url = URL.createObjectURL(blob);
     var a = document.createElement('a');
     a.href = url;
-    a.download = name + '-' + date + '.txt';
+    a.download = name + '-' + new Date().toISOString().slice(0, 10) + '.txt';
     document.body.appendChild(a);
     a.click();
     a.remove();
     setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
   }
 
-  /* ---- Arayüzün belirip sönmesi ----------------------------------------- */
+  /* ---- Çubuğun belirip sönmesi ------------------------------------------ */
 
   function showUI() {
     if (body.classList.contains('zen')) return;
@@ -263,11 +400,13 @@
 
   /* ---- Başlangıç -------------------------------------------------------- */
 
+  applyLang();
   setText(read(K.note, ''));
   lastBackup = read(K.backup, null);
-  applyLang();
+  measure();
   editor.focus();
   try { editor.setSelectionRange(editor.value.length, editor.value.length); } catch (e) {}
+  setTimeout(function () { introPending = false; ghostShow(true); }, GHOST_DELAY);
   showUI();
   setInterval(takeBackup, BACKUP_EVERY);
 
@@ -275,15 +414,30 @@
 
   editor.addEventListener('input', function () {
     lastTypedAt = Date.now();
+    ghostStop(true);
+    refreshMirror(true);
     updateCount();
     setStatus('typing', 0);
     schedule();
     hideUI();
+    if (!editor.value) ghostShow(false);
   });
 
+  editor.addEventListener('scroll', syncScroll, { passive: true });
   editor.addEventListener('blur', flush);
   window.addEventListener('pagehide', flush);
   window.addEventListener('beforeunload', flush);
+  window.addEventListener('resize', measure);
+
+  /* Çince/Japonca gibi girdi yöntemlerinde besteleme sırasında aynayı
+     devre dışı bırak, asıl metni görünür kıl. */
+  editor.addEventListener('compositionstart', function () {
+    body.classList.add('composing');
+  });
+  editor.addEventListener('compositionend', function () {
+    body.classList.remove('composing');
+    refreshMirror(false);
+  });
 
   document.addEventListener('visibilitychange', function () {
     if (document.visibilityState === 'hidden') { flush(); return; }
@@ -335,21 +489,27 @@
     }
   });
 
+  /* Sayfanın herhangi bir yerine dokunmak yazmaya başlatır. */
+  document.addEventListener('pointerdown', function (e) {
+    if (e.target === editor || e.target.closest('.bar')) return;
+    e.preventDefault();
+    editor.focus();
+  });
+
+  /* Çubuğa tıklayınca imleç yazıda kalsın. */
+  bar.addEventListener('mousedown', function (e) { e.preventDefault(); });
+
   window.addEventListener('mousemove', showUI, { passive: true });
   window.addEventListener('touchstart', showUI, { passive: true });
 
   btn.theme.addEventListener('click', function () { toggleTheme(); showUI(); });
-  btn.font.addEventListener('click', function () { cycleFont(); showUI(); });
+  btn.paper.addEventListener('click', function () { cycle(PAPERS, 'paper', K.paper); showUI(); });
+  btn.font.addEventListener('click', function () { cycle(FONTS, 'font', K.font); showUI(); });
   btn.smaller.addEventListener('click', function () { stepSize(-1); showUI(); });
   btn.bigger.addEventListener('click', function () { stepSize(1); showUI(); });
   btn.download.addEventListener('click', function () { download(); showUI(); });
   btn.restore.addEventListener('click', function () { restoreBackup(); showUI(); });
   btn.lang.addEventListener('click', function () { toggleLang(); showUI(); });
-
-  /* Araç çubuğuna tıklayınca imleç yazıda kalsın. */
-  document.querySelector('.bar').addEventListener('mousedown', function (e) {
-    e.preventDefault();
-  });
 
   /* ---- Çevrimdışı ------------------------------------------------------- */
 

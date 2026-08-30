@@ -1,14 +1,19 @@
 /* ---- Tema ---------------------------------------------------------------
-   Tüm renkler burada tanımlanır. Karanlık tema iki yerde tekrarlanır:
-   sistem tercihi (manuel "light" seçimi hariç) ve açık manuel seçim.        */
+   Tüm renkler burada. Karanlık tema iki yerde tekrar eder: sistem tercihi
+   (elle "light" seçilmediyse) ve elle "dark" seçimi.                        */
 
 :root {
-  --paper:  #FBFAF7;
-  --ink:    #1C1B19;
-  --muted:  #A29C91;
-  --faint:  #ECE8DF;
-  --accent: #B08A46;
-  --select: rgba(176, 138, 70, .20);
+  --paper-bg: #FBFAF7;
+  --ink:      #1C1B19;
+  --muted:    #A29C91;
+  --faint:    #ECE8DF;
+  --accent:   #B08A46;
+  --select:   rgba(176, 138, 70, .20);
+  --rule:     rgba(28, 27, 25, .09);
+  --rule-fine:rgba(28, 27, 25, .06);
+  --bar-bg:   rgba(251, 250, 247, .82);
+  --bar-edge: rgba(28, 27, 25, .09);
+  --bar-shadow: 0 1px 2px rgba(28, 27, 25, .04), 0 8px 24px rgba(28, 27, 25, .07);
 
   --measure: 68ch;
   --pad-y: 5.5rem;
@@ -23,30 +28,42 @@
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --paper:  #131211;
-    --ink:    #E9E6E0;
-    --muted:  #706B63;
-    --faint:  #242220;
-    --select: rgba(176, 138, 70, .26);
+    --paper-bg: #131211;
+    --ink:      #E9E6E0;
+    --muted:    #706B63;
+    --faint:    #242220;
+    --select:   rgba(176, 138, 70, .26);
+    --rule:     rgba(233, 230, 224, .10);
+    --rule-fine:rgba(233, 230, 224, .07);
+    --bar-bg:   rgba(26, 24, 23, .82);
+    --bar-edge: rgba(233, 230, 224, .10);
+    --bar-shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 8px 24px rgba(0, 0, 0, .38);
   }
 }
 
 :root[data-theme="dark"] {
-  --paper:  #131211;
-  --ink:    #E9E6E0;
-  --muted:  #706B63;
-  --faint:  #242220;
-  --select: rgba(176, 138, 70, .26);
+  --paper-bg: #131211;
+  --ink:      #E9E6E0;
+  --muted:    #706B63;
+  --faint:    #242220;
+  --select:   rgba(176, 138, 70, .26);
+  --rule:     rgba(233, 230, 224, .10);
+  --rule-fine:rgba(233, 230, 224, .07);
+  --bar-bg:   rgba(26, 24, 23, .82);
+  --bar-edge: rgba(233, 230, 224, .10);
+  --bar-shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 8px 24px rgba(0, 0, 0, .38);
 }
 
 /* ---- Tipografi tercihleri ---------------------------------------------- */
 
-:root            { --font: var(--font-sans);  --fs: 1.0625rem; }
+:root                    { --font: var(--font-sans); --fs: 1.0625rem; }
 :root[data-font="serif"] { --font: var(--font-serif); }
 :root[data-font="mono"]  { --font: var(--font-mono); }
-:root[data-size="1"] { --fs: .9375rem; }
-:root[data-size="2"] { --fs: 1.0625rem; }
-:root[data-size="3"] { --fs: 1.25rem; }
+:root[data-size="1"]     { --fs: .9375rem; }
+:root[data-size="2"]     { --fs: 1.0625rem; }
+:root[data-size="3"]     { --fs: 1.25rem; }
+
+:root { --lh: calc(var(--fs) * 1.75); }
 
 /* ---- İskelet ------------------------------------------------------------ */
 
@@ -56,7 +73,7 @@ html, body {
   height: 100%;
   margin: 0;
   overflow: hidden;
-  background: var(--paper);
+  background: var(--paper-bg);
   color: var(--ink);
   -webkit-text-size-adjust: 100%;
   -webkit-tap-highlight-color: transparent;
@@ -67,8 +84,6 @@ body {
   transition: background-color .35s var(--ease), color .35s var(--ease);
 }
 
-::selection { background: var(--select); }
-
 .sheet {
   height: 100dvh;
   padding: 0 var(--pad-x);
@@ -76,49 +91,141 @@ body {
   padding-right: max(var(--pad-x), env(safe-area-inset-right));
 }
 
-#editor {
-  display: block;
-  width: 100%;
-  max-width: var(--measure);
+.stack {
+  position: relative;
   height: 100%;
+  max-width: var(--measure);
   margin: 0 auto;
+}
+
+/* ---- Üst üste binen katmanlar -------------------------------------------
+   Ayna (mirror), karşılama yazısı (ghost) ve textarea birebir aynı
+   tipografiyi ve dolguyu paylaşmak zorunda; yoksa harfler kaymaya başlar.  */
+
+.layer {
+  position: absolute;
+  inset: 0;
+  margin: 0;
   padding: var(--pad-y) 0 calc(var(--pad-y) + env(safe-area-inset-bottom));
   border: 0;
-  outline: 0;
-  resize: none;
-  background: transparent;
-  color: inherit;
-  caret-color: var(--accent);
   font-family: var(--font);
   font-size: var(--fs);
-  line-height: 1.75;
+  line-height: var(--lh);
   letter-spacing: .003em;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  word-break: normal;
+  tab-size: 4;
+}
+
+.mirror, .ghost {
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.mirror { color: var(--ink); }
+.ghost  { color: var(--muted); }
+
+#editor {
+  z-index: 2;
+  resize: none;
+  outline: 0;
+  background: transparent;
+  color: var(--ink);
+  caret-color: var(--accent);
   overflow-y: auto;
   scrollbar-width: none;
-  transition: font-size .2s var(--ease);
 }
 
 #editor::-webkit-scrollbar { width: 0; height: 0; }
-#editor::placeholder { color: var(--muted); opacity: 1; }
+::selection { background: var(--select); }
+
+/* Ayna devreye girince asıl metin saydamlaşır; JS çalışmazsa metin görünür
+   kalsın diye bu sınıf yalnızca ayna kurulduktan sonra eklenir. */
+body.mirrored #editor { color: transparent; }
+body.composing #editor { color: var(--ink); }
+body.composing .mirror { visibility: hidden; }
+
+/* Yeni yazılan harfler yerine otururken kısa bir mürekkep parlaması. */
+@keyframes ink-in {
+  from { opacity: 0; color: var(--accent); }
+  to   { opacity: 1; color: inherit; }
+}
+
+.ink { animation: ink-in .19s var(--ease) both; }
+
+/* ---- Karşılama yazısı (daktilo) ----------------------------------------- */
+
+.ghost-caret {
+  display: inline-block;
+  width: 1px;
+  margin-left: 1px;
+  vertical-align: text-bottom;
+  height: 1.15em;
+  background: var(--accent);
+  animation: blink 1.1s steps(1) infinite;
+}
+
+@keyframes blink { 0%, 49% { opacity: 1 } 50%, 100% { opacity: 0 } }
+
+/* ---- Kağıt zemini (düz / çizgili / kareli) ------------------------------ */
+
+.paper {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-repeat: repeat;
+  background-position: 0 var(--pad-y);
+}
+
+:root[data-paper="ruled"] .paper {
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent calc(var(--lh) - 1px),
+    var(--rule) calc(var(--lh) - 1px),
+    var(--rule) var(--lh)
+  );
+}
+
+:root[data-paper="grid"] .paper {
+  background-image:
+    repeating-linear-gradient(
+      to bottom,
+      transparent 0,
+      transparent calc(var(--lh) - 1px),
+      var(--rule-fine) calc(var(--lh) - 1px),
+      var(--rule-fine) var(--lh)
+    ),
+    repeating-linear-gradient(
+      to right,
+      transparent 0,
+      transparent calc(var(--lh) - 1px),
+      var(--rule-fine) calc(var(--lh) - 1px),
+      var(--rule-fine) var(--lh)
+    );
+}
 
 /* ---- Durum göstergesi ---------------------------------------------------
-   Kaydetme anında belirir, kısa süre sonra kendi kendine söner.             */
+   Kaydetme anında belirir, kısa süre sonra kendiliğinden söner.             */
 
 .status {
   position: fixed;
   top: max(1.6rem, env(safe-area-inset-top));
-  right: var(--pad-x);
   right: max(var(--pad-x), env(safe-area-inset-right));
   margin: 0;
   display: flex;
   align-items: center;
   gap: .5em;
-  font-size: .75rem;
+  font: .75rem/1 var(--font-sans);
   letter-spacing: .04em;
   color: var(--muted);
   opacity: 0;
   transition: opacity .45s var(--ease);
   pointer-events: none;
+  z-index: 5;
 }
 
 .status::before {
@@ -135,35 +242,48 @@ body {
 .status[data-state="error"] { color: #C4553D; }
 .status[data-state="error"]::before { background: currentColor; transform: scale(1.2); }
 
-/* ---- Alt çubuk ----------------------------------------------------------
-   Varsayılan olarak görünmez; fare/dokunuşla belirir, boşta kalınca söner.  */
+/* ---- Ortadaki çubuk ------------------------------------------------------
+   Normalde görünmez; fare/dokunuşla belirir, yazmaya başlayınca söner.      */
 
-.bar {
+.dock {
   position: fixed;
-  left: var(--pad-x);
-  right: var(--pad-x);
-  left: max(var(--pad-x), env(safe-area-inset-left));
-  right: max(var(--pad-x), env(safe-area-inset-right));
-  bottom: max(1.25rem, env(safe-area-inset-bottom));
+  left: 0;
+  right: 0;
+  bottom: max(1.5rem, env(safe-area-inset-bottom));
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  opacity: 0;
-  visibility: hidden;
-  transition: opacity .35s var(--ease), visibility .35s;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 4;
 }
 
-body.ui-on .bar { opacity: 1; visibility: visible; }
-body.zen .bar, body.zen .status { opacity: 0 !important; visibility: hidden !important; }
+.bar {
+  display: flex;
+  align-items: center;
+  gap: .125rem;
+  padding: .3125rem;
+  border: 1px solid var(--bar-edge);
+  border-radius: 999px;
+  background: var(--bar-bg);
+  box-shadow: var(--bar-shadow);
+  -webkit-backdrop-filter: blur(14px) saturate(1.4);
+  backdrop-filter: blur(14px) saturate(1.4);
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(6px);
+  transition: opacity .3s var(--ease), transform .3s var(--ease), visibility .3s;
+  pointer-events: auto;
+}
 
-.tools { display: flex; align-items: center; gap: .125rem; }
+body.ui-on .bar { opacity: 1; visibility: visible; transform: none; }
+
+body.zen .bar { opacity: 0 !important; visibility: hidden !important; }
+body.zen .status, body.zen .count { opacity: 0 !important; }
 
 .sep {
   width: 1px;
-  height: 16px;
-  margin: 0 .5rem;
-  background: var(--faint);
+  height: 18px;
+  margin: 0 .3125rem;
+  background: var(--bar-edge);
 }
 
 .tool {
@@ -173,7 +293,7 @@ body.zen .bar, body.zen .status { opacity: 0 !important; visibility: hidden !imp
   height: 32px;
   padding: 0;
   border: 0;
-  border-radius: 8px;
+  border-radius: 999px;
   background: transparent;
   color: var(--muted);
   cursor: pointer;
@@ -183,11 +303,7 @@ body.zen .bar, body.zen .status { opacity: 0 !important; visibility: hidden !imp
 .tool[hidden] { display: none; }
 .tool:hover  { color: var(--ink); background: var(--faint); }
 .tool:active { transform: translateY(.5px); }
-.tool:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-  color: var(--ink);
-}
+.tool:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; color: var(--ink); }
 
 .tool svg {
   width: 20px;
@@ -208,7 +324,7 @@ body.zen .bar, body.zen .status { opacity: 0 !important; visibility: hidden !imp
 }
 
 /* Açık temada ay, karanlık temada güneş göster. */
-.i-sun  { display: none; }
+.i-sun { display: none; }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) .i-sun  { display: inline; }
   :root:not([data-theme="light"]) .i-moon { display: none; }
@@ -216,38 +332,58 @@ body.zen .bar, body.zen .status { opacity: 0 !important; visibility: hidden !imp
 :root[data-theme="dark"] .i-sun  { display: inline; }
 :root[data-theme="dark"] .i-moon { display: none; }
 
+/* Kağıt düğmesi o an seçili kağıdı gösterir. */
+.p-ruled, .p-grid { display: none; }
+:root[data-paper="ruled"] .p-ruled { display: inline; }
+:root[data-paper="grid"]  .p-grid  { display: inline; }
+:root[data-paper="plain"] .p-frame { opacity: .85; }
+
+/* ---- Sayaç -------------------------------------------------------------- */
+
 .count {
+  position: fixed;
+  right: max(var(--pad-x), env(safe-area-inset-right));
+  bottom: max(2.1rem, calc(env(safe-area-inset-bottom) + .6rem));
   margin: 0;
-  font-size: .75rem;
+  font: .75rem/1 var(--font-sans);
   letter-spacing: .02em;
   color: var(--muted);
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity .3s var(--ease), visibility .3s;
+  pointer-events: none;
+  z-index: 3;
 }
+
+body.ui-on .count { opacity: 1; visibility: visible; }
 
 /* ---- Duyarlılık --------------------------------------------------------- */
 
-@media (max-width: 640px) {
+@media (max-width: 700px) {
   :root { --pad-y: 4rem; }
-  #editor { font-size: max(var(--fs), 1rem); } /* iOS'ta odaklanınca yakınlaşmasın */
+  .layer { font-size: max(var(--fs), 1rem); } /* iOS odakta yakınlaştırmasın */
   .count { display: none; }
-  .bar { justify-content: center; }
+  .bar { padding: .25rem; }
+  .tool { width: 30px; height: 30px; }
+  .sep { margin: 0 .1875rem; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  * { transition-duration: .01ms !important; animation-duration: .01ms !important; }
+  *, *::before, *::after {
+    transition-duration: .01ms !important;
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+  }
 }
 
 /* ---- Baskı -------------------------------------------------------------- */
 
 @media print {
-  .bar, .status { display: none !important; }
-  html, body, .sheet { height: auto; overflow: visible; background: #fff; color: #000; }
-  #editor {
-    height: auto;
-    padding: 0;
-    max-width: none;
-    font-size: 11pt;
-    overflow: visible;
-  }
+  .dock, .status, .count, .paper, .ghost { display: none !important; }
+  html, body, .sheet, .stack { height: auto; overflow: visible; background: #fff; color: #000; }
+  .layer { position: static; padding: 0; max-width: none; font-size: 11pt; }
+  #editor { display: none; }
+  .mirror { overflow: visible; color: #000; }
 }

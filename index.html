@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="tr" data-font="sans" data-size="2">
+<html lang="tr" data-font="sans" data-size="2" data-paper="plain">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -17,13 +17,14 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="stylesheet" href="style.css">
 <script>
-/* Tema/tipografi tercihini boyamadan önce uygula — açılışta yanıp sönme olmasın. */
+/* Tercihleri boyamadan önce uygula — açılışta yanıp sönme olmasın. */
 (function () {
   try {
     var p = 'cagrinotepad:v1:', d = document.documentElement, g = function (k) { return localStorage.getItem(p + k); };
     var t = g('theme'); if (t === 'light' || t === 'dark') d.dataset.theme = t;
     var f = g('font');  if (f) d.dataset.font = f;
     var s = g('size');  if (s) d.dataset.size = s;
+    var w = g('paper'); if (w) d.dataset.paper = w;
     var l = g('lang');  if (l) d.lang = l;
   } catch (e) {}
 })();
@@ -32,31 +33,49 @@
 <body>
 
 <main class="sheet">
-  <textarea id="editor"
-    autofocus
-    autocomplete="off"
-    autocapitalize="sentences"
-    spellcheck="false"
-    aria-label="Not"></textarea>
+  <div class="stack">
+    <div class="paper" id="paper" aria-hidden="true"></div>
+    <div class="layer mirror" id="mirror" aria-hidden="true"></div>
+    <div class="layer ghost" id="ghost" aria-hidden="true"></div>
+    <textarea class="layer" id="editor"
+      autocomplete="off"
+      autocapitalize="sentences"
+      spellcheck="false"
+      aria-label="Not"></textarea>
+  </div>
 </main>
 
 <p class="status" id="status" role="status" aria-live="polite"></p>
 
-<footer class="bar">
-  <div class="tools" role="toolbar" aria-label="Ayarlar">
+<div class="dock">
+  <div class="bar" role="toolbar" aria-label="Ayarlar">
     <button type="button" id="t-theme" class="tool" aria-label="Tema">
-      <svg viewBox="0 0 20 20" aria-hidden="true"><path class="i-sun" d="M10 3.2v1.6M10 15.2v1.6M3.2 10h1.6M15.2 10h1.6M5.2 5.2l1.1 1.1M13.7 13.7l1.1 1.1M14.8 5.2l-1.1 1.1M6.3 13.7l-1.1 1.1"/><circle class="i-sun" cx="10" cy="10" r="3.4"/><path class="i-moon" d="M15.4 12.3A6 6 0 0 1 7.7 4.6a6 6 0 1 0 7.7 7.7Z"/></svg>
+      <svg viewBox="0 0 20 20" aria-hidden="true"><g class="i-sun"><path d="M10 3.2v1.6M10 15.2v1.6M3.2 10h1.6M15.2 10h1.6M5.2 5.2l1.1 1.1M13.7 13.7l1.1 1.1M14.8 5.2l-1.1 1.1M6.3 13.7l-1.1 1.1"/><circle cx="10" cy="10" r="3.4"/></g><path class="i-moon" d="M15.4 12.3A6 6 0 0 1 7.7 4.6a6 6 0 1 0 7.7 7.7Z"/></svg>
     </button>
+
+    <button type="button" id="t-paper" class="tool" aria-label="Kağıt">
+      <svg viewBox="0 0 20 20" aria-hidden="true">
+        <rect class="p-frame" x="3.5" y="3" width="13" height="14" rx="2"/>
+        <g class="p-ruled"><path d="M6.2 7.6h7.6M6.2 10h7.6M6.2 12.4h7.6"/></g>
+        <g class="p-grid"><path d="M6.2 7.6h7.6M6.2 12.4h7.6M7.6 5.4v9.2M12.4 5.4v9.2"/></g>
+      </svg>
+    </button>
+
     <button type="button" id="t-font" class="tool" aria-label="Yazı tipi">
       <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3.6 15.4 8 4.6h1.2l4.4 10.8M5.4 11.6h6.6"/><path d="M14.4 15.4h2.2"/></svg>
     </button>
+
+    <span class="sep" aria-hidden="true"></span>
+
     <button type="button" id="t-smaller" class="tool" aria-label="Yazıyı küçült">
       <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 10h10"/></svg>
     </button>
     <button type="button" id="t-bigger" class="tool" aria-label="Yazıyı büyüt">
       <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 10h10M10 5v10"/></svg>
     </button>
+
     <span class="sep" aria-hidden="true"></span>
+
     <button type="button" id="t-download" class="tool" aria-label="Metni indir">
       <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 3.6v8.2M6.6 8.6 10 12l3.4-3.4M4.4 15.2h11.2"/></svg>
     </button>
@@ -65,8 +84,9 @@
     </button>
     <button type="button" id="t-lang" class="tool tool--text" aria-label="Dili değiştir">EN</button>
   </div>
-  <p class="count" id="count"></p>
-</footer>
+</div>
+
+<p class="count" id="count"></p>
 
 <script src="app.js"></script>
 </body>
