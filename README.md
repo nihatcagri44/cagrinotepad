@@ -1,5 +1,7 @@
 # Çağrı Notepad
 
+**https://cagrinotepad.pages.dev**
+
 Aç, yaz, kapat. Yazdığın kendiliğinden kaydedilir ve geri döndüğünde tam bıraktığın
 yerde durur.
 
@@ -64,10 +66,18 @@ devre dışı kalır.)
 
 ## Yayına alma
 
-Statik dosyalar; klasörün tamamı olduğu gibi yüklenir.
+Cloudflare Pages, `cagrinotepad` projesi. Statik dosyalar; klasörün tamamı olduğu
+gibi yüklenir.
 
 ```
-npx wrangler pages deploy . --project-name=cagrinotepad
+npx wrangler pages deploy . --project-name=cagrinotepad --branch=main
+```
+
+Wrangler oturumu kapalıysa cihaz akışıyla aç (tarayıcı callback'i zaman aşımına
+uğruyorsa tek çalışan yol budur):
+
+```
+npx wrangler login --device --browser false
 ```
 
 ## Veri nerede duruyor
