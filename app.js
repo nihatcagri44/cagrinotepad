@@ -88,7 +88,7 @@
 
   var saveTimer = null, statusTimer = null, uiTimer = null;
   var flattenTimer = null, ghostTimer = null;
-  var lastTypedAt = 0, lastBackup = null, prevValue = '', padTop = 0;
+  var lastTypedAt = 0, lastBackup = null, prevValue = '', padTop = 0, colLeft = 0;
   var introPending = true;   // açılış daktilosu henüz başlamadı
 
   /* ---- Depolama ------------------------------------------------------- */
@@ -173,11 +173,12 @@
 
   function syncScroll() {
     mirror.scrollTop = editor.scrollTop;
-    paper.style.backgroundPositionY = (padTop - editor.scrollTop) + 'px';
+    paper.style.backgroundPosition = colLeft + 'px ' + (padTop - editor.scrollTop) + 'px';
   }
 
   function measure() {
     padTop = parseFloat(getComputedStyle(editor).paddingTop) || 0;
+    colLeft = Math.round(editor.getBoundingClientRect().left);
     syncScroll();
   }
 

@@ -15,7 +15,8 @@ Tek sayfa. Menü yok, hesap yok, kayıt düğmesi yok, reklam yok. Notların tar
 - **Animasyonlu yazı** — yazdığın her harf kısa bir mürekkep parlamasıyla yerine oturur
 - **Daktilo karşılaması** — boş sayfada örnek metin harf harf yazılır, ilk tuşta kaybolur
 - **Sayfanın her yeri tıklanabilir** — nereye dokunursan dokun imleç yazıya gelir
-- **Üç kağıt** — düz, çizgili, kareli; çizgiler satır yüksekliğine oturur
+- **Üç kağıt** — düz, çizgili, kareli; ekranı tamamen kaplar, çizgiler satır
+  yüksekliğine oturur ve metinle birlikte kayar
 - **Ortada tek çubuk** — bütün ayarlar altta ortalanmış bir barda toplanır
 - **Dakikalık yedek** — metni yanlışlıkla silersen çubuktaki ⟲ ile geri al
 - **Çoklu sekme** — bir sekmede yazdığın diğerine geçer, sekmeler birbirini ezmez

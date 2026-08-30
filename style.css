@@ -85,6 +85,8 @@ body {
 }
 
 .sheet {
+  position: relative;
+  z-index: 1;
   height: 100dvh;
   padding: 0 var(--pad-x);
   padding-left: max(var(--pad-x), env(safe-area-inset-left));
@@ -169,10 +171,12 @@ body.composing .mirror { visibility: hidden; }
 
 @keyframes blink { 0%, 49% { opacity: 1 } 50%, 100% { opacity: 0 } }
 
-/* ---- Kağıt zemini (düz / çizgili / kareli) ------------------------------ */
+/* ---- Kağıt zemini (düz / çizgili / kareli) ------------------------------
+   Ekranın tamamını kaplar. Yatay çizgiler satır yüksekliğine, dikey çizgiler
+   metin sütununun sol kenarına hizalanır; konumu JS her kaydırmada günceller. */
 
 .paper {
-  position: absolute;
+  position: fixed;
   inset: 0;
   z-index: 0;
   pointer-events: none;
