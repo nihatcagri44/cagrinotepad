@@ -1,6 +1,6 @@
 # Çağrı Notepad
 
-**https://cagrinotepad.pages.dev**
+**https://nihatcagri44.github.io/cagrinotepad/**
 
 Aç, yaz, kapat. Yazdığın kendiliğinden kaydedilir ve geri döndüğünde tam bıraktığın
 yerde durur.
@@ -66,8 +66,26 @@ devre dışı kalır.)
 
 ## Yayına alma
 
-Cloudflare Pages, `cagrinotepad` projesi. Statik dosyalar; klasörün tamamı olduğu
-gibi yüklenir.
+**GitHub Pages (birincil).** `main` dalı / root'tan yayınlanır — push yeter:
+
+```
+git push origin main
+```
+
+Push için repoya özel bir deploy key kullanılıyor (hesabın fine-grained PAT'i bu
+repoyu kapsamıyor):
+
+```
+GIT_SSH_COMMAND="ssh -i ~/.ssh/cagrinotepad_deploy -o IdentitiesOnly=yes" git push origin main
+```
+
+**Neden Cloudflare Pages değil:** `pages.dev` Türkiye'de DNS seviyesinde engelli —
+ISP çözücüsünde apex `195.175.254.2`'ye (engel sinkhole) düşüyor, alt alan adları
+NXDOMAIN dönüyor. Site sorunsuz çalışıyor ama Türkiye'den açılmıyor. `github.io`
+gerçek IP'sine çözülüyor, o yüzden birincil adres orası. Kendi alan adı alınırsa
+Cloudflare Pages'e bağlanabilir, engel yalnızca `pages.dev` adında.
+
+Cloudflare Pages (yedek, TR dışı):
 
 ```
 npx wrangler pages deploy . --project-name=cagrinotepad --branch=main
