@@ -1,0 +1,17 @@
+{
+  "name": "Çağrı Notepad",
+  "short_name": "Notepad",
+  "description": "Aç, yaz, kapat. Yazdığın kendiliğinden kaydedilir.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#FBFAF7",
+  "theme_color": "#FBFAF7",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
