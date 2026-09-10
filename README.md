@@ -5,11 +5,17 @@
 Aç, yaz, kapat. Yazdığın kendiliğinden kaydedilir ve geri döndüğünde tam bıraktığın
 yerde durur.
 
-Tek sayfa. Menü yok, hesap yok, kayıt düğmesi yok, reklam yok. Notların tarayıcından
-çıkmaz — sunucuya hiçbir şey gönderilmez.
+Menü yok, hesap yok, kayıt düğmesi yok, reklam yok. Solda istersen açtığın sade bir
+not listesi var, o kadar. Notların tarayıcından çıkmaz — sunucuya hiçbir şey
+gönderilmez.
 
 ## Özellikler
 
+- **Not paneli** — solda açılıp kapanan sade liste: yeni not, eski notlar (ilk satır
+  başlık olur, tarihe göre sıralı), hover'da sil. Masaüstünde sayfayı iter, mobilde
+  üstüne kayar. Durumu hatırlanır.
+- **Seçim çerçevesi** — fareyle basılı tutup sürüklerken masaüstündeki dosya seçimi
+  gibi bir dikdörtgen belirir; asıl metin seçimi aynen çalışır
 - **Otomatik kayıt** — yazma durduktan 300 ms sonra, ayrıca sekme arkaya alınınca,
   odak kaybedilince ve sayfa kapanırken anında
 - **Animasyonlu yazı** — yazdığın her harf kısa bir mürekkep parlamasıyla yerine oturur
@@ -30,6 +36,8 @@ Tek sayfa. Menü yok, hesap yok, kayıt düğmesi yok, reklam yok. Notların tar
 
 | Tuş | İş |
 |---|---|
+| `⌘B` / `Ctrl+B` | Not panelini aç / kapat |
+| `⌘⇧N` / `Ctrl+Shift+N` | Yeni not |
 | `⌘S` / `Ctrl+S` | Anında kaydet |
 | `⌘D` / `Ctrl+D` | Açık ↔ koyu tema |
 | `⌘E` / `Ctrl+E` | Metni `.txt` indir |
@@ -101,22 +109,25 @@ npx wrangler login --device --browser false
 
 ## Veri nerede duruyor
 
-Tarayıcının `localStorage`'ında, `cagrinotepad:v1:` önekiyle:
+Tarayıcının `localStorage`'ında, `cagrinotepad:` önekiyle:
 
 | Anahtar | İçerik |
 |---|---|
-| `…:note` | metnin kendisi |
-| `…:backup`, `…:backupAt` | dakikalık yedek ve zamanı |
-| `…:theme`, `…:paper`, `…:font`, `…:size`, `…:lang` | tercihler |
+| `v2:notes` | notların tamamı — `[{ id, text, created, updated }]` |
+| `v2:current` | açık notun id'si |
+| `v2:panel` | panel açık mı |
+| `v2:backup` | aktif notun dakikalık yedeği — `{ id, text, at }` |
+| `v1:theme`, `v1:paper`, `v1:font`, `v1:size`, `v1:lang` | tercihler |
+| `v1:note` | eski tek not; ilk açılışta `v2:notes`'a taşınır, silinmez |
 
 Tarayıcı verisini temizlersen notlar da gider. Önemli metinleri `⌘E` ile indir.
 
 ## Dosyalar
 
 ```
-index.html            katmanlar (kağıt / ayna / karşılama / textarea) + tercih ön yükleme
-style.css             tema, kağıt desenleri, ortadaki çubuk, animasyonlar, baskı stili
-app.js                ayna, animasyon, daktilo, otosave, yedek, tercihler, kısayollar
+index.html            panel + katmanlar (kağıt / ayna / karşılama / textarea) + tercih ön yükleme
+style.css             tema, kağıt desenleri, panel, seçim çerçevesi, çubuk, animasyonlar, baskı
+app.js                notlar, panel, ayna, animasyon, daktilo, otosave, yedek, tercihler, kısayollar
 sw.js                 çevrimdışı önbellek
 manifest.webmanifest  PWA tanımı
 icon.svg              uygulama ikonu (+ türetilmiş png'ler)

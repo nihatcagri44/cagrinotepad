@@ -14,8 +14,12 @@
   --bar-bg:   rgba(251, 250, 247, .82);
   --bar-edge: rgba(28, 27, 25, .09);
   --bar-shadow: 0 1px 2px rgba(28, 27, 25, .04), 0 8px 24px rgba(28, 27, 25, .07);
+  --marquee-fill: rgba(176, 138, 70, .10);
+  --marquee-edge: rgba(176, 138, 70, .55);
+  --scrim:    rgba(28, 27, 25, .18);
 
   --measure: 68ch;
+  --panel-w: 264px;
   --pad-y: 5.5rem;
   --pad-x: clamp(20px, 6vw, 56px);
 
@@ -38,6 +42,9 @@
     --bar-bg:   rgba(26, 24, 23, .82);
     --bar-edge: rgba(233, 230, 224, .10);
     --bar-shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 8px 24px rgba(0, 0, 0, .38);
+    --marquee-fill: rgba(176, 138, 70, .14);
+    --marquee-edge: rgba(176, 138, 70, .65);
+    --scrim:    rgba(0, 0, 0, .45);
   }
 }
 
@@ -52,6 +59,9 @@
   --bar-bg:   rgba(26, 24, 23, .82);
   --bar-edge: rgba(233, 230, 224, .10);
   --bar-shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 8px 24px rgba(0, 0, 0, .38);
+  --marquee-fill: rgba(176, 138, 70, .14);
+  --marquee-edge: rgba(176, 138, 70, .65);
+  --scrim:    rgba(0, 0, 0, .45);
 }
 
 /* ---- Tipografi tercihleri ---------------------------------------------- */
@@ -84,9 +94,17 @@ body {
   transition: background-color .35s var(--ease), color .35s var(--ease);
 }
 
-.sheet {
+/* Panel + sayfa yan yana. Panel genişliği 0'dan açılır, sayfa kalan alanı alır. */
+.shell {
   position: relative;
   z-index: 1;
+  display: flex;
+  height: 100dvh;
+}
+
+.sheet {
+  flex: 1 1 auto;
+  min-width: 0;
   height: 100dvh;
   padding: 0 var(--pad-x);
   padding-left: max(var(--pad-x), env(safe-area-inset-left));
@@ -212,6 +230,177 @@ body.composing .mirror { visibility: hidden; }
     );
 }
 
+/* ---- Seçim çerçevesi ------------------------------------------------------
+   Fareyle basılı tutup sürüklerken, masaüstündeki dosya seçimi gibi bir
+   dikdörtgen. Görsel; asıl metin seçimini textarea kendisi yapar.          */
+
+.marquee {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 3;
+  pointer-events: none;
+  border: 1px solid var(--marquee-edge);
+  border-radius: 2px;
+  background: var(--marquee-fill);
+  will-change: transform, width, height;
+}
+
+.marquee[hidden] { display: none; }
+
+/* ---- Not paneli -----------------------------------------------------------
+   Solda, sayfayı sağa iter. Kağıt çizgileri altından görünmesin diye opak. */
+
+.panel {
+  flex: 0 0 auto;
+  width: 0;
+  height: 100dvh;
+  overflow: hidden;
+  background: var(--paper-bg);
+  border-right: 1px solid transparent;
+}
+
+body.ready .panel {
+  transition: width .32s var(--ease), border-color .32s var(--ease);
+}
+
+:root[data-panel="1"] .panel {
+  width: var(--panel-w);
+  border-right-color: var(--bar-edge);
+}
+
+body.zen .panel { width: 0 !important; border-right-color: transparent !important; }
+
+.panel-inner {
+  display: flex;
+  flex-direction: column;
+  width: var(--panel-w);
+  height: 100%;
+  padding: max(1.25rem, env(safe-area-inset-top)) 0 max(1rem, env(safe-area-inset-bottom));
+}
+
+.panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 .75rem 0 1.375rem;
+  margin-bottom: .625rem;
+}
+
+.panel-title {
+  font: 600 .6875rem/1 var(--font-sans);
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.notes {
+  flex: 1 1 auto;
+  margin: 0;
+  padding: 0 .75rem;
+  list-style: none;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--faint) transparent;
+}
+
+.note {
+  position: relative;
+  margin-bottom: 2px;
+  border-radius: 9px;
+  transition: background-color .15s var(--ease);
+}
+
+.note:hover, .note.is-current { background: var(--faint); }
+
+.note-open {
+  display: block;
+  width: 100%;
+  padding: .55rem 2rem .55rem .75rem;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+
+.note-open:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+.note-title {
+  display: block;
+  font: 500 .875rem/1.35 var(--font-sans);
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.note.is-empty .note-title { color: var(--muted); font-weight: 400; }
+
+.note-meta {
+  display: block;
+  margin-top: .2rem;
+  font: .6875rem/1 var(--font-sans);
+  letter-spacing: .02em;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.note-del {
+  position: absolute;
+  right: .375rem;
+  top: 50%;
+  width: 24px;
+  height: 24px;
+  transform: translateY(-50%);
+  opacity: 0;
+  transition: opacity .15s var(--ease), color .15s var(--ease), background-color .15s var(--ease);
+}
+
+.note:hover .note-del, .note-del:focus-visible { opacity: 1; }
+.note-del:hover { color: #C4553D; }
+.note-del svg { width: 16px; height: 16px; }
+
+@media (hover: none) { .note-del { opacity: .55; } }
+
+/* Dar ekranda panel sayfayı itmek yerine üstüne kayar. */
+.scrim { display: none; }
+
+@media (max-width: 900px) {
+  .panel {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 7;
+    width: min(300px, 86vw);
+    height: auto;
+    border-right: 1px solid var(--bar-edge);
+    transform: translateX(-102%);
+  }
+
+  body.ready .panel { transition: transform .3s var(--ease), box-shadow .3s var(--ease); }
+  :root[data-panel="1"] .panel { width: min(300px, 86vw); transform: none; box-shadow: var(--bar-shadow); }
+  body.zen .panel { transform: translateX(-102%) !important; }
+
+  .panel-inner { width: 100%; }
+
+  .scrim {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 6;
+    background: var(--scrim);
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity .3s var(--ease), visibility .3s;
+  }
+
+  :root[data-panel="1"] body:not(.zen) .scrim { opacity: 1; visibility: visible; }
+}
+
 /* ---- Durum göstergesi ---------------------------------------------------
    Kaydetme anında belirir, kısa süre sonra kendiliğinden söner.             */
 
@@ -308,6 +497,7 @@ body.zen .status, body.zen .count { opacity: 0 !important; }
 .tool:hover  { color: var(--ink); background: var(--faint); }
 .tool:active { transform: translateY(.5px); }
 .tool:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; color: var(--ink); }
+.tool[aria-pressed="true"] { color: var(--ink); }
 
 .tool svg {
   width: 20px;
@@ -385,8 +575,8 @@ body.ui-on .count { opacity: 1; visibility: visible; }
 /* ---- Baskı -------------------------------------------------------------- */
 
 @media print {
-  .dock, .status, .count, .paper, .ghost { display: none !important; }
-  html, body, .sheet, .stack { height: auto; overflow: visible; background: #fff; color: #000; }
+  .dock, .status, .count, .paper, .ghost, .panel, .scrim, .marquee { display: none !important; }
+  html, body, .shell, .sheet, .stack { height: auto; overflow: visible; background: #fff; color: #000; display: block; }
   .layer { position: static; padding: 0; max-width: none; font-size: 11pt; }
   #editor { display: none; }
   .mirror { overflow: visible; color: #000; }

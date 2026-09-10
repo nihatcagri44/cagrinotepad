@@ -1,24 +1,30 @@
-/* Çağrı Notepad — tek sayfa, kendiliğinden kaydeden defter.
+/* Çağrı Notepad — kendiliğinden kaydeden defter.
    Bağımlılık yok. Veri tarayıcıdan çıkmaz.
 
    Yazının animasyonlu belirmesi için metin iki katmanda yaşar: gerçek
    <textarea> (saydam yazı, görünür imleç) ve onun arkasında birebir aynı
    tipografiye sahip bir "ayna". Görünen harfler aynanın harfleridir; yeni
-   yazılanlar oraya kısa bir animasyonla eklenir.                            */
+   yazılanlar oraya kısa bir animasyonla eklenir.
+
+   Notlar tek bir JSON dizisinde tutulur (v2). İlk açılışta v1'deki tek not
+   dizinin ilk elemanı olur; eski anahtar silinmez.                          */
 
 (function () {
   'use strict';
 
-  var NS = 'cagrinotepad:v1:';
+  var V1 = 'cagrinotepad:v1:';
+  var V2 = 'cagrinotepad:v2:';
   var K = {
-    note: NS + 'note',
-    backup: NS + 'backup',
-    backupAt: NS + 'backupAt',
-    theme: NS + 'theme',
-    font: NS + 'font',
-    size: NS + 'size',
-    paper: NS + 'paper',
-    lang: NS + 'lang'
+    legacyNote: V1 + 'note',
+    theme: V1 + 'theme',
+    font: V1 + 'font',
+    size: V1 + 'size',
+    paper: V1 + 'paper',
+    lang: V1 + 'lang',
+    notes: V2 + 'notes',
+    current: V2 + 'current',
+    panel: V2 + 'panel',
+    backup: V2 + 'backup'
   };
 
   var SAVE_DELAY = 300;      // yazma durduktan sonra diske yazma gecikmesi
@@ -30,6 +36,9 @@
   var INK_MAX = 240;         // bundan uzun eklemeler (yapıştırma) animasyonsuz
   var GHOST_SPEED = 26;      // karşılama yazısının daktilo hızı
   var GHOST_DELAY = 320;
+  var DRAG_MIN = 4;          // çerçeve bu kadar px sürüklenince belirir
+  var PANEL_ANIM = 380;      // panel açılırken kağıt hizasını bu süre boyunca izle
+  var TITLE_MAX = 60;
 
   var STR = {
     tr: {
@@ -38,13 +47,17 @@
       saved: 'Kaydedildi',
       error: 'Kaydedilemedi — metni indir',
       count: function (w, c) { return w + ' kelime · ' + c + ' karakter'; },
+      panel: 'Notlar', newNote: 'Yeni not', deleteNote: 'Notu sil',
       theme: 'Tema', paper: 'Kağıt', font: 'Yazı tipi',
       smaller: 'Yazıyı küçült', bigger: 'Yazıyı büyüt',
       download: 'Metni indir', restore: 'Yedeği geri yükle', lang: 'Dili değiştir',
       restoreAsk: function (t) {
         return t + ' tarihli yedek geri yüklensin mi?\nŞu anki metnin yerine geçecek.';
       },
-      untitled: 'not'
+      deleteAsk: function (title) { return '"' + title + '" silinsin mi?\nBu geri alınamaz.'; },
+      untitled: 'not',
+      emptyTitle: 'Boş not',
+      words: function (n) { return n + ' kelime'; }
     },
     en: {
       placeholder: 'Start typing. Everything saves itself.',
@@ -52,13 +65,17 @@
       saved: 'Saved',
       error: 'Could not save — download your text',
       count: function (w, c) { return w + ' words · ' + c + ' characters'; },
+      panel: 'Notes', newNote: 'New note', deleteNote: 'Delete note',
       theme: 'Theme', paper: 'Paper', font: 'Typeface',
       smaller: 'Smaller text', bigger: 'Larger text',
       download: 'Download text', restore: 'Restore backup', lang: 'Switch language',
       restoreAsk: function (t) {
         return 'Restore the backup from ' + t + '?\nIt will replace your current text.';
       },
-      untitled: 'note'
+      deleteAsk: function (title) { return 'Delete "' + title + '"?\nThis cannot be undone.'; },
+      untitled: 'note',
+      emptyTitle: 'Empty note',
+      words: function (n) { return n + ' words'; }
     }
   };
 
@@ -68,10 +85,17 @@
   var mirror = document.getElementById('mirror');
   var ghost = document.getElementById('ghost');
   var paper = document.getElementById('paper');
+  var marquee = document.getElementById('marquee');
+  var panel = document.getElementById('panel');
+  var panelTitle = document.getElementById('panel-title');
+  var notesEl = document.getElementById('notes');
+  var scrim = document.getElementById('scrim');
   var statusEl = document.getElementById('status');
   var countEl = document.getElementById('count');
   var bar = document.querySelector('.bar');
   var btn = {
+    panel: document.getElementById('t-panel'),
+    newNote: document.getElementById('n-new'),
     theme: document.getElementById('t-theme'),
     paper: document.getElementById('t-paper'),
     font: document.getElementById('t-font'),
@@ -85,11 +109,16 @@
   var lang = STR[root.lang] ? root.lang : 'tr';
   var t = STR[lang];
   var calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var narrow = matchMedia('(max-width: 900px)');
+
+  var notes = [];            // [{ id, text, created, updated }]
+  var current = null;        // notes içindeki aktif nesne
 
   var saveTimer = null, statusTimer = null, uiTimer = null;
   var flattenTimer = null, ghostTimer = null;
-  var lastTypedAt = 0, lastBackup = null, prevValue = '', padTop = 0, colLeft = 0;
+  var lastTypedAt = 0, prevValue = '', padTop = 0, colLeft = 0;
   var introPending = true;   // açılış daktilosu henüz başlamadı
+  var drag = null;           // seçim çerçevesi durumu
 
   /* ---- Depolama ------------------------------------------------------- */
 
@@ -103,6 +132,174 @@
   function store(key, value) {
     try { localStorage.setItem(key, value); return true; }
     catch (e) { return false; }
+  }
+
+  function readJSON(key) {
+    var raw = read(key, null);
+    if (raw === null) return null;
+    try { return JSON.parse(raw); } catch (e) { return null; }
+  }
+
+  /* ---- Notlar ----------------------------------------------------------- */
+
+  function uid() {
+    return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  }
+
+  function makeNote(text) {
+    var now = Date.now();
+    return { id: uid(), text: text || '', created: now, updated: now };
+  }
+
+  function loadNotes() {
+    var arr = readJSON(K.notes);
+    if (!Array.isArray(arr)) arr = [];
+    arr = arr.filter(function (n) { return n && typeof n.id === 'string'; });
+    if (!arr.length) arr = [makeNote(read(K.legacyNote, ''))];   // v1'den taşı
+    notes = arr;
+
+    var wanted = read(K.current, null);
+    current = notes.filter(function (n) { return n.id === wanted; })[0] || sorted()[0];
+  }
+
+  function persistNotes() {
+    return store(K.notes, JSON.stringify(notes)) && store(K.current, current.id);
+  }
+
+  function sorted() {
+    return notes.slice().sort(function (a, b) { return b.updated - a.updated; });
+  }
+
+  function firstLine(text) {
+    var lines = text.split('\n');
+    for (var i = 0; i < lines.length; i++) {
+      var s = lines[i].trim();
+      if (s) return s;
+    }
+    return '';
+  }
+
+  function titleOf(note) {
+    var s = firstLine(note.text);
+    return s ? s.slice(0, TITLE_MAX) : t.emptyTitle;
+  }
+
+  function whenOf(ts) {
+    var d = new Date(ts), now = new Date();
+    if (d.toDateString() === now.toDateString()) {
+      return d.toLocaleTimeString(lang, { hour: '2-digit', minute: '2-digit' });
+    }
+    var opts = { day: 'numeric', month: 'short' };
+    if (d.getFullYear() !== now.getFullYear()) opts.year = 'numeric';
+    return d.toLocaleDateString(lang, opts);
+  }
+
+  function wordCount(text) {
+    return text.trim() ? text.trim().split(/\s+/).length : 0;
+  }
+
+  function renderList() {
+    var frag = document.createDocumentFragment();
+    sorted().forEach(function (n) {
+      var li = document.createElement('li');
+      li.className = 'note' + (n === current ? ' is-current' : '') + (firstLine(n.text) ? '' : ' is-empty');
+      li.dataset.id = n.id;
+
+      var open = document.createElement('button');
+      open.type = 'button';
+      open.className = 'note-open';
+      if (n === current) open.setAttribute('aria-current', 'true');
+
+      var title = document.createElement('span');
+      title.className = 'note-title';
+      title.textContent = titleOf(n);
+
+      var meta = document.createElement('span');
+      meta.className = 'note-meta';
+      meta.textContent = whenOf(n.updated) + ' · ' + t.words(wordCount(n.text).toLocaleString(lang));
+
+      open.appendChild(title);
+      open.appendChild(meta);
+
+      var del = document.createElement('button');
+      del.type = 'button';
+      del.className = 'tool note-del';
+      del.setAttribute('aria-label', t.deleteNote);
+      del.title = t.deleteNote;
+      del.innerHTML = '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M6 6l8 8M14 6l-8 8"/></svg>';
+
+      li.appendChild(open);
+      li.appendChild(del);
+      frag.appendChild(li);
+    });
+    notesEl.replaceChildren(frag);
+  }
+
+  function openNote(id) {
+    var n = notes.filter(function (x) { return x.id === id; })[0];
+    if (!n || n === current) return;
+    flushNow();
+    current = n;
+    store(K.current, current.id);
+    setText(current.text);
+    editor.scrollTop = 0;
+    syncScroll();
+    renderList();
+    editor.focus();
+    try { editor.setSelectionRange(current.text.length, current.text.length); } catch (e) {}
+    if (narrow.matches) setPanel(false);
+  }
+
+  function newNote() {
+    flushNow();
+    var n = makeNote('');
+    notes.push(n);
+    current = n;
+    persistNotes();
+    setText('');
+    editor.scrollTop = 0;
+    syncScroll();
+    renderList();
+    editor.focus();
+    if (narrow.matches) setPanel(false);
+  }
+
+  function deleteNote(id) {
+    var n = notes.filter(function (x) { return x.id === id; })[0];
+    if (!n) return;
+    if (!confirm(t.deleteAsk(titleOf(n)))) return;
+
+    notes = notes.filter(function (x) { return x !== n; });
+    if (n === current) {
+      if (!notes.length) notes.push(makeNote(''));
+      current = sorted()[0];
+      setText(current.text);
+      editor.scrollTop = 0;
+      syncScroll();
+    }
+    persistNotes();
+    renderList();
+    editor.focus();
+  }
+
+  /* ---- Panel ------------------------------------------------------------ */
+
+  function panelOpen() { return root.dataset.panel === '1'; }
+
+  function setPanel(open) {
+    root.dataset.panel = open ? '1' : '0';
+    btn.panel.setAttribute('aria-pressed', open ? 'true' : 'false');
+    store(K.panel, open ? '1' : '0');
+    trackMeasure();
+  }
+
+  /* Panel açılıp kapanırken metin sütunu kayar; kağıt çizgileri onu izlesin. */
+  function trackMeasure() {
+    var t0 = performance.now();
+    (function step() {
+      measure();
+      if (performance.now() - t0 < PANEL_ANIM) requestAnimationFrame(step);
+    })();
   }
 
   /* ---- Ayna katmanı -----------------------------------------------------
@@ -224,8 +421,14 @@
 
   function commit() {
     saveTimer = null;
-    if (store(K.note, editor.value)) setStatus('saved', STATUS_HIDE);
+    var changed = current.text !== editor.value;
+    if (changed) {
+      current.text = editor.value;
+      current.updated = Date.now();
+    }
+    if (persistNotes()) setStatus('saved', STATUS_HIDE);
     else setStatus('error', 0);
+    if (changed) renderList();
   }
 
   function flush() {
@@ -256,37 +459,33 @@
 
   function updateCount() {
     var v = editor.value;
-    var words = v.trim() ? v.trim().split(/\s+/).length : 0;
-    countEl.textContent = t.count(words.toLocaleString(lang), v.length.toLocaleString(lang));
+    countEl.textContent = t.count(wordCount(v).toLocaleString(lang), v.length.toLocaleString(lang));
   }
 
   /* ---- Yedek ------------------------------------------------------------
-     Dakikada bir anlık kopya. Metni yanlışlıkla silersen geri dönüş yolu.  */
+     Dakikada bir, aktif notun anlık kopyası. Yanlışlıkla silersen dönüş yolu. */
 
   function takeBackup() {
     var v = editor.value;
-    if (!v.trim() || v === lastBackup) return;
-    if (store(K.backup, v)) {
-      store(K.backupAt, String(Date.now()));
-      lastBackup = v;
-    }
+    var b = readJSON(K.backup);
+    if (!v.trim() || (b && b.id === current.id && b.text === v)) return;
+    store(K.backup, JSON.stringify({ id: current.id, text: v, at: Date.now() }));
     refreshRestore();
   }
 
   function refreshRestore() {
-    var b = read(K.backup, '');
-    btn.restore.hidden = !b || b === editor.value;
+    var b = readJSON(K.backup);
+    btn.restore.hidden = !(b && b.id === current.id && b.text && b.text !== editor.value);
   }
 
   function restoreBackup() {
-    var b = read(K.backup, '');
-    if (!b) return;
-    var at = Number(read(K.backupAt, 0));
-    var when = at
-      ? new Date(at).toLocaleString(lang, { dateStyle: 'medium', timeStyle: 'short' })
+    var b = readJSON(K.backup);
+    if (!b || b.id !== current.id || !b.text) return;
+    var when = b.at
+      ? new Date(b.at).toLocaleString(lang, { dateStyle: 'medium', timeStyle: 'short' })
       : '—';
     if (!confirm(t.restoreAsk(when))) return;
-    setText(b);
+    setText(b.text);
     flushNow();
   }
 
@@ -340,6 +539,8 @@
 
   function applyLang() {
     editor.setAttribute('aria-label', lang === 'tr' ? 'Not' : 'Note');
+    panel.setAttribute('aria-label', t.panel);
+    panelTitle.textContent = t.panel;
     for (var key in btn) {
       if (btn[key] && t[key]) {
         btn[key].setAttribute('aria-label', t[key]);
@@ -349,6 +550,7 @@
     btn.lang.textContent = lang === 'tr' ? 'EN' : 'TR';
     updateCount();
     ghostShow(false);
+    if (current) renderList();
     if (statusEl.dataset.state) statusEl.textContent = t[statusEl.dataset.state] || '';
   }
 
@@ -368,12 +570,7 @@
   }
 
   function download() {
-    var lines = editor.value.split('\n');
-    var first = '';
-    for (var i = 0; i < lines.length; i++) {
-      if (lines[i].trim()) { first = lines[i].trim(); break; }
-    }
-    var name = slug(first) || t.untitled;
+    var name = slug(firstLine(editor.value)) || t.untitled;
     var blob = new Blob([editor.value], { type: 'text/plain;charset=utf-8' });
     var url = URL.createObjectURL(blob);
     var a = document.createElement('a');
@@ -383,6 +580,35 @@
     a.click();
     a.remove();
     setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+  }
+
+  /* ---- Seçim çerçevesi ----------------------------------------------------
+     Fareyle basılı tutup sürüklerken masaüstündeki dosya seçimi gibi bir
+     dikdörtgen. Yalnızca görsel; asıl seçimi textarea yapmaya devam eder.  */
+
+  function dragStart(e) {
+    if (e.pointerType !== 'mouse' || e.button !== 0) return;
+    drag = { x: e.clientX, y: e.clientY, on: false };
+  }
+
+  function dragMove(e) {
+    if (!drag) return;
+    var dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+    if (!drag.on) {
+      if (Math.abs(dx) < DRAG_MIN && Math.abs(dy) < DRAG_MIN) return;
+      drag.on = true;
+      marquee.hidden = false;
+    }
+    marquee.style.transform = 'translate(' + Math.min(e.clientX, drag.x) + 'px,' + Math.min(e.clientY, drag.y) + 'px)';
+    marquee.style.width = Math.abs(dx) + 'px';
+    marquee.style.height = Math.abs(dy) + 'px';
+  }
+
+  function dragEnd() {
+    if (!drag) return;
+    drag = null;
+    marquee.hidden = true;
+    marquee.style.width = marquee.style.height = '0px';
   }
 
   /* ---- Çubuğun belirip sönmesi ------------------------------------------ */
@@ -401,15 +627,19 @@
 
   /* ---- Başlangıç -------------------------------------------------------- */
 
+  loadNotes();
   applyLang();
-  setText(read(K.note, ''));
-  lastBackup = read(K.backup, null);
+  setText(current.text);
+  persistNotes();                 // v1'den taşındıysa v2'ye hemen yaz
+  renderList();
+  btn.panel.setAttribute('aria-pressed', panelOpen() ? 'true' : 'false');
   measure();
   editor.focus();
   try { editor.setSelectionRange(editor.value.length, editor.value.length); } catch (e) {}
   setTimeout(function () { introPending = false; ghostShow(true); }, GHOST_DELAY);
   showUI();
   setInterval(takeBackup, BACKUP_EVERY);
+  requestAnimationFrame(function () { body.classList.add('ready'); });   // geçişler ancak şimdi
 
   /* ---- Olaylar ---------------------------------------------------------- */
 
@@ -430,6 +660,12 @@
   window.addEventListener('beforeunload', flush);
   window.addEventListener('resize', measure);
 
+  editor.addEventListener('pointerdown', dragStart);
+  window.addEventListener('pointermove', dragMove, { passive: true });
+  window.addEventListener('pointerup', dragEnd);
+  window.addEventListener('pointercancel', dragEnd);
+  window.addEventListener('blur', dragEnd);
+
   /* Çince/Japonca gibi girdi yöntemlerinde besteleme sırasında aynayı
      devre dışı bırak, asıl metni görünür kıl. */
   editor.addEventListener('compositionstart', function () {
@@ -447,18 +683,30 @@
 
   /* Başka sekmede yazılanı al — burada az önce yazmadıysan ve imleci koru. */
   function adoptExternal() {
-    var stored = read(K.note, null);
-    if (stored === null || stored === editor.value) return;
+    var arr = readJSON(K.notes);
+    if (!Array.isArray(arr) || !arr.length) return;
     if (Date.now() - lastTypedAt < ADOPT_GRACE) return;
+
+    notes = arr.filter(function (n) { return n && typeof n.id === 'string'; });
+    var same = notes.filter(function (n) { return n.id === current.id; })[0];
+    if (!same) {                          // aktif not başka sekmede silinmiş
+      current = sorted()[0];
+      setText(current.text);
+      renderList();
+      return;
+    }
+    current = same;
+    renderList();
+    if (current.text === editor.value) return;
     var start = editor.selectionStart, end = editor.selectionEnd;
-    setText(stored);
+    setText(current.text);
     try {
-      editor.setSelectionRange(Math.min(start, stored.length), Math.min(end, stored.length));
+      editor.setSelectionRange(Math.min(start, current.text.length), Math.min(end, current.text.length));
     } catch (e) {}
   }
 
   window.addEventListener('storage', function (e) {
-    if (e.key === K.note) adoptExternal();
+    if (e.key === K.notes) adoptExternal();
     if (e.key === K.backup) refreshRestore();
   });
 
@@ -482,17 +730,23 @@
       if (k === 's') { e.preventDefault(); flushNow(); setStatus('saved', STATUS_HIDE); return; }
       if (k === 'd') { e.preventDefault(); toggleTheme(); showUI(); return; }
       if (k === 'e') { e.preventDefault(); download(); return; }
+      if (k === 'b') { e.preventDefault(); setPanel(!panelOpen()); return; }
+    }
+    if (mod && e.shiftKey && !e.altKey && e.key.toLowerCase() === 'n') {
+      e.preventDefault(); newNote(); return;
     }
     if (e.key === 'Escape') {
+      if (narrow.matches && panelOpen()) { setPanel(false); editor.focus(); return; }
       body.classList.toggle('zen');
       if (body.classList.contains('zen')) hideUI();
+      trackMeasure();
       editor.focus();
     }
   });
 
   /* Sayfanın herhangi bir yerine dokunmak yazmaya başlatır. */
   document.addEventListener('pointerdown', function (e) {
-    if (e.target === editor || e.target.closest('.bar')) return;
+    if (e.target === editor || e.target.closest('.bar, .panel, .scrim')) return;
     e.preventDefault();
     editor.focus();
   });
@@ -503,6 +757,17 @@
   window.addEventListener('mousemove', showUI, { passive: true });
   window.addEventListener('touchstart', showUI, { passive: true });
 
+  notesEl.addEventListener('click', function (e) {
+    var li = e.target.closest('.note');
+    if (!li) return;
+    if (e.target.closest('.note-del')) deleteNote(li.dataset.id);
+    else openNote(li.dataset.id);
+  });
+
+  scrim.addEventListener('click', function () { setPanel(false); editor.focus(); });
+
+  btn.panel.addEventListener('click', function () { setPanel(!panelOpen()); showUI(); });
+  btn.newNote.addEventListener('click', newNote);
   btn.theme.addEventListener('click', function () { toggleTheme(); showUI(); });
   btn.paper.addEventListener('click', function () { cycle(PAPERS, 'paper', K.paper); showUI(); });
   btn.font.addEventListener('click', function () { cycle(FONTS, 'font', K.font); showUI(); });

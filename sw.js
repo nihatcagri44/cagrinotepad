@@ -1,7 +1,7 @@
 /* Çevrimdışı çalışsın diye küçük bir önbellek.
    Sayfa ve varlıklar ağdan tazelenir, ağ yoksa önbellekten servis edilir. */
 
-var CACHE = 'cagrinotepad-v1';
+var CACHE = 'cagrinotepad-v2';
 var ASSETS = [
   './',
   'index.html',

@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="tr" data-font="sans" data-size="2" data-paper="plain">
+<html lang="tr" data-font="sans" data-size="2" data-paper="plain" data-panel="0">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -20,12 +20,17 @@
 /* Tercihleri boyamadan önce uygula — açılışta yanıp sönme olmasın. */
 (function () {
   try {
-    var p = 'cagrinotepad:v1:', d = document.documentElement, g = function (k) { return localStorage.getItem(p + k); };
+    var d = document.documentElement;
+    var g = function (k) { return localStorage.getItem('cagrinotepad:v1:' + k); };
     var t = g('theme'); if (t === 'light' || t === 'dark') d.dataset.theme = t;
     var f = g('font');  if (f) d.dataset.font = f;
     var s = g('size');  if (s) d.dataset.size = s;
     var w = g('paper'); if (w) d.dataset.paper = w;
     var l = g('lang');  if (l) d.lang = l;
+    /* Panel: ilk ziyarette geniş ekranda açık, darda kapalı; sonra hatırlanır. */
+    var p = localStorage.getItem('cagrinotepad:v2:panel');
+    if (p === null) p = matchMedia('(min-width: 900px)').matches ? '1' : '0';
+    d.dataset.panel = p;
   } catch (e) {}
 })();
 </script>
@@ -34,22 +39,45 @@
 
 <div class="paper" id="paper" aria-hidden="true"></div>
 
-<main class="sheet">
-  <div class="stack">
-    <div class="layer mirror" id="mirror" aria-hidden="true"></div>
-    <div class="layer ghost" id="ghost" aria-hidden="true"></div>
-    <textarea class="layer" id="editor"
-      autocomplete="off"
-      autocapitalize="sentences"
-      spellcheck="false"
-      aria-label="Not"></textarea>
-  </div>
-</main>
+<div class="shell">
+  <aside class="panel" id="panel" aria-label="Notlar">
+    <div class="panel-inner">
+      <div class="panel-head">
+        <span class="panel-title" id="panel-title">Notlar</span>
+        <button type="button" id="n-new" class="tool" aria-label="Yeni not">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 10h10M10 5v10"/></svg>
+        </button>
+      </div>
+      <ul class="notes" id="notes"></ul>
+    </div>
+  </aside>
+
+  <main class="sheet">
+    <div class="stack">
+      <div class="layer mirror" id="mirror" aria-hidden="true"></div>
+      <div class="layer ghost" id="ghost" aria-hidden="true"></div>
+      <textarea class="layer" id="editor"
+        autocomplete="off"
+        autocapitalize="sentences"
+        spellcheck="false"
+        aria-label="Not"></textarea>
+    </div>
+  </main>
+</div>
+
+<div class="scrim" id="scrim" aria-hidden="true"></div>
+<div class="marquee" id="marquee" aria-hidden="true" hidden></div>
 
 <p class="status" id="status" role="status" aria-live="polite"></p>
 
 <div class="dock">
   <div class="bar" role="toolbar" aria-label="Ayarlar">
+    <button type="button" id="t-panel" class="tool" aria-label="Notlar" aria-pressed="false">
+      <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="4" width="14" height="12" rx="2"/><path d="M8 4v12"/></svg>
+    </button>
+
+    <span class="sep" aria-hidden="true"></span>
+
     <button type="button" id="t-theme" class="tool" aria-label="Tema">
       <svg viewBox="0 0 20 20" aria-hidden="true"><g class="i-sun"><path d="M10 3.2v1.6M10 15.2v1.6M3.2 10h1.6M15.2 10h1.6M5.2 5.2l1.1 1.1M13.7 13.7l1.1 1.1M14.8 5.2l-1.1 1.1M6.3 13.7l-1.1 1.1"/><circle cx="10" cy="10" r="3.4"/></g><path class="i-moon" d="M15.4 12.3A6 6 0 0 1 7.7 4.6a6 6 0 1 0 7.7 7.7Z"/></svg>
     </button>
