@@ -50,6 +50,8 @@
       panel: 'Notlar', newNote: 'Yeni not', deleteNote: 'Notu sil',
       theme: 'Tema', paper: 'Kağıt', font: 'Yazı tipi',
       smaller: 'Yazıyı küçült', bigger: 'Yazıyı büyüt',
+      urgent: 'Acil — kırmızı uyarı ekle / kaldır',
+      important: 'Önemli — sarı uyarı ekle / kaldır',
       download: 'Metni indir', restore: 'Yedeği geri yükle', lang: 'Dili değiştir',
       restoreAsk: function (t) {
         return t + ' tarihli yedek geri yüklensin mi?\nŞu anki metnin yerine geçecek.';
@@ -68,6 +70,8 @@
       panel: 'Notes', newNote: 'New note', deleteNote: 'Delete note',
       theme: 'Theme', paper: 'Paper', font: 'Typeface',
       smaller: 'Smaller text', bigger: 'Larger text',
+      urgent: 'Urgent — toggle red alert',
+      important: 'Important — toggle yellow alert',
       download: 'Download text', restore: 'Restore backup', lang: 'Switch language',
       restoreAsk: function (t) {
         return 'Restore the backup from ' + t + '?\nIt will replace your current text.';
@@ -96,6 +100,8 @@
   var btn = {
     panel: document.getElementById('t-panel'),
     newNote: document.getElementById('n-new'),
+    urgent: document.getElementById('t-urgent'),
+    important: document.getElementById('t-important'),
     theme: document.getElementById('t-theme'),
     paper: document.getElementById('t-paper'),
     font: document.getElementById('t-font'),
@@ -212,7 +218,7 @@
 
       var title = document.createElement('span');
       title.className = 'note-title';
-      title.textContent = titleOf(n);
+      title.appendChild(paintedText(titleOf(n)));
 
       var meta = document.createElement('span');
       meta.className = 'note-meta';
@@ -305,29 +311,51 @@
   /* ---- Ayna katmanı -----------------------------------------------------
      from/to verilirse o aralıktaki harfler tek tek animasyonlu eklenir.    */
 
-  function paint(value, from, to) {
-    var frag = document.createDocumentFragment();
-
-    if (from == null) {
-      frag.appendChild(document.createTextNode(value + '\n'));
+  function appendInk(parent, value, offset, from, to) {
+    var start = Math.max(0, from - offset), end = Math.min(value.length, to - offset);
+    if (from == null || start >= end) {
+      parent.appendChild(document.createTextNode(value));
     } else {
-      if (from > 0) frag.appendChild(document.createTextNode(value.slice(0, from)));
-      var i = from, n = 0;
-      while (i < to) {
+      parent.appendChild(document.createTextNode(value.slice(0, start)));
+      var i = start;
+      while (i < end) {
         var ch = String.fromCodePoint(value.codePointAt(i));
         var span = document.createElement('span');
         span.className = 'ink';
         span.textContent = ch;
-        span.style.animationDelay = Math.min(n * INK_STAGGER, 320) + 'ms';
-        frag.appendChild(span);
+        span.style.animationDelay = Math.min((offset + i - from) * INK_STAGGER, 320) + 'ms';
+        parent.appendChild(span);
         i += ch.length;
-        n++;
       }
-      /* Sondaki satır sonu, textarea'nın gösterdiği boş son satırı taklit eder;
-         olmazsa en alta kaydırınca satırlar bir satır kayar. */
-      frag.appendChild(document.createTextNode(value.slice(to) + '\n'));
+      parent.appendChild(document.createTextNode(value.slice(end)));
     }
+  }
 
+  /* İşaret metnin içinde kaldığı için kayıt, yedek, kopyalama ve .txt kayıpsızdır.
+     Görünmez glif kendi genişliğini korur; çizilen ikon imleci kaydırmaz. */
+  function paintedText(value, from, to) {
+    var frag = document.createDocumentFragment();
+    var re = /^[\t ]*(🔴|🟡)(?=[\t ]|$)/gm;
+    var match, cursor = 0;
+    while ((match = re.exec(value))) {
+      var at = match.index + match[0].length - match[1].length;
+      appendInk(frag, value.slice(cursor, at), cursor, from, to);
+      var marker = document.createElement('span');
+      marker.className = 'priority-marker priority--' + (match[1] === '🔴' ? 'red' : 'yellow');
+      var glyph = document.createElement('span');
+      glyph.className = 'priority-glyph';
+      glyph.textContent = match[1];
+      marker.appendChild(glyph);
+      frag.appendChild(marker);
+      cursor = at + match[1].length;
+    }
+    appendInk(frag, value.slice(cursor), cursor, from, to);
+    return frag;
+  }
+
+  function paint(value, from, to) {
+    /* Son boş satır textarea ile aynı kaydırma yüksekliğini sağlar. */
+    var frag = paintedText(value + '\n', from, to);
     mirror.replaceChildren(frag);
     body.classList.add('mirrored');
   }
@@ -366,6 +394,7 @@
 
     prevValue = v;
     syncScroll();
+    refreshPriority();
   }
 
   function syncScroll() {
@@ -377,6 +406,69 @@
     padTop = parseFloat(getComputedStyle(editor).paddingTop) || 0;
     colLeft = Math.round(editor.getBoundingClientRect().left);
     syncScroll();
+  }
+
+  /* ---- Satır öncelikleri ------------------------------------------------ */
+
+  function priorityLines() {
+    var value = editor.value, start = editor.selectionStart, end = editor.selectionEnd;
+    var first = start === 0 ? 0 : value.lastIndexOf('\n', start - 1) + 1;
+    // Seçimin sonundaki satır sonu, bir sonraki satırı seçime katmaz.
+    var last = end > start && value[end - 1] === '\n' ? end - 1 : end;
+    var stop = value.indexOf('\n', last);
+    if (stop < 0) stop = value.length;
+    var offset = first;
+    return value.slice(first, stop).split('\n').map(function (line) {
+      var match = /^([\t ]*)(?:(🔴|🟡)(?:[\t ]|$))?/.exec(line);
+      var item = { start: offset + match[1].length,
+        end: offset + match[0].length, token: match[2], blank: !line.trim() };
+      offset += line.length + 1;
+      return item;
+    }).filter(function (line, i, lines) { return lines.length === 1 || !line.blank; });
+  }
+
+  function refreshPriority() {
+    var lines = priorityLines();
+    btn.urgent.setAttribute('aria-pressed', String(lines.length > 0 && lines.every(function (line) { return line.token === '🔴'; })));
+    btn.important.setAttribute('aria-pressed', String(lines.length > 0 && lines.every(function (line) { return line.token === '🟡'; })));
+  }
+
+  function togglePriority(token) {
+    var lines = priorityLines();
+    if (!lines.length) return;
+    var remove = lines.every(function (line) { return line.token === token; });
+    var replacement = remove ? '' : token + ' ';
+    var value = editor.value, start = editor.selectionStart, end = editor.selectionEnd;
+    var direction = editor.selectionDirection, scroll = editor.scrollTop;
+    var from = lines[0].start, to = lines[lines.length - 1].end;
+    var text = '', cursor = from;
+    lines.forEach(function (line) {
+      text += value.slice(cursor, line.start) + replacement;
+      cursor = line.end;
+    });
+
+    function moved(pos) {
+      var next = pos;
+      lines.forEach(function (line) {
+        if (pos >= line.start) next += replacement.length - Math.min(pos - line.start, line.end - line.start);
+      });
+      return next;
+    }
+
+    editor.focus({ preventScroll: true });
+    editor.setSelectionRange(from, to);
+    // Tarayıcının geri alma geçmişinde tek bir düzenleme olarak tut.
+    var ok = false;
+    try { ok = document.execCommand('insertText', false, text); } catch (e) {}
+    if (!ok) {
+      editor.setRangeText(text, from, to, 'end');
+      editor.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+    editor.setSelectionRange(moved(start), moved(end), direction);
+    editor.scrollTop = scroll;
+    syncScroll();
+    refreshPriority();
+    showUI();
   }
 
   /* ---- Karşılama yazısı --------------------------------------------------
@@ -655,6 +747,10 @@
   });
 
   editor.addEventListener('scroll', syncScroll, { passive: true });
+  editor.addEventListener('select', refreshPriority);
+  document.addEventListener('selectionchange', function () {
+    if (document.activeElement === editor) refreshPriority();
+  });
   editor.addEventListener('blur', flush);
   window.addEventListener('pagehide', flush);
   window.addEventListener('beforeunload', flush);
@@ -768,6 +864,8 @@
 
   btn.panel.addEventListener('click', function () { setPanel(!panelOpen()); showUI(); });
   btn.newNote.addEventListener('click', newNote);
+  btn.urgent.addEventListener('click', function () { togglePriority('🔴'); });
+  btn.important.addEventListener('click', function () { togglePriority('🟡'); });
   btn.theme.addEventListener('click', function () { toggleTheme(); showUI(); });
   btn.paper.addEventListener('click', function () { cycle(PAPERS, 'paper', K.paper); showUI(); });
   btn.font.addEventListener('click', function () { cycle(FONTS, 'font', K.font); showUI(); });

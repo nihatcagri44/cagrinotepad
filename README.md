@@ -19,6 +19,12 @@ gönderilmez.
 - **Otomatik kayıt** — yazma durduktan 300 ms sonra, ayrıca sekme arkaya alınınca,
   odak kaybedilince ve sayfa kapanırken anında
 - **Animasyonlu yazı** — yazdığın her harf kısa bir mürekkep parlamasıyla yerine oturur
+- **Animasyonlu öncelik ikonları** — çubuktaki kırmızı uyarı “Acil”, sarı uyarı
+  “Önemli” için. İmlecin bulunduğu satırın (veya seçili satırların) başına eklenir;
+  aynı düğmeye tekrar basınca kaldırılır, diğer renge basınca değiştirilir.
+  Girintiler korunur; çoklu seçimde boş satırlar atlanır. İşaretler notla birlikte
+  kaydedilir, kopyalama ve `.txt` indirmede 🔴 / 🟡 olarak taşınır.
+  Hareketi azalt tercihi açıksa ikonlar sabit görünür.
 - **Daktilo karşılaması** — boş sayfada örnek metin harf harf yazılır, ilk tuşta kaybolur
 - **Sayfanın her yeri tıklanabilir** — nereye dokunursan dokun imleç yazıya gelir
 - **Üç kağıt** — düz, çizgili, kareli; ekranı tamamen kaplar, çizgiler satır
