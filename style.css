@@ -232,10 +232,10 @@ body.composing .mirror { visibility: hidden; }
   animation: priority-light var(--priority-speed) steps(1, end) infinite;
 }
 
-/* Beyaza yakın ışık merkezi: yarım döngü tam parlak, yarım döngü sönük. */
+/* Işık merkezi ve hale %50 yoğunlukta yanıp söner. */
 @keyframes priority-light {
   0%, 48% {
-    opacity: 1;
+    opacity: .5;
     color: var(--priority-core);
     filter: brightness(1.8) drop-shadow(0 0 .2em #fff) drop-shadow(0 0 .65em var(--priority-lit));
   }
@@ -247,7 +247,7 @@ body.composing .mirror { visibility: hidden; }
 }
 
 @keyframes priority-halo {
-  0%, 48% { opacity: 1; }
+  0%, 48% { opacity: .5; }
   49%, 100% { opacity: 0; }
 }
 
