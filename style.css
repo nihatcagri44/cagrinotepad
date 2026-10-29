@@ -187,7 +187,7 @@ body.composing .mirror { visibility: hidden; }
   --priority-core: #FFF8F8;
   --priority-wash: rgba(227, 77, 77, .13);
   --priority-glow: rgba(255, 20, 20, .98);
-  --priority-speed: .9s;
+  --priority-speed: 2.4s;
 }
 .priority--yellow {
   --priority-color: #D5A400;
@@ -195,7 +195,7 @@ body.composing .mirror { visibility: hidden; }
   --priority-core: #FFFFF2;
   --priority-wash: rgba(213, 164, 0, .15);
   --priority-glow: rgba(255, 210, 0, .98);
-  --priority-speed: 1.2s;
+  --priority-speed: 3.2s;
 }
 
 .priority-marker { position: relative; color: var(--priority-color); }
@@ -233,7 +233,7 @@ body.composing .mirror { visibility: hidden; }
   animation: priority-light var(--priority-speed) ease-in-out infinite;
 }
 
-/* Yalnızca not metninde, %50 yoğunluğa yumuşakça çıkıp geri söner. */
+/* Yalnızca not metninde yavaşça parlar; en sönük anda da ikon görünür kalır. */
 @keyframes priority-light {
   50% {
     opacity: .5;
@@ -241,15 +241,15 @@ body.composing .mirror { visibility: hidden; }
     filter: brightness(1.8) drop-shadow(0 0 .1em #fff) drop-shadow(0 0 .325em var(--priority-lit));
   }
   0%, 100% {
-    opacity: .02;
+    opacity: .4;
     color: var(--priority-color);
-    filter: brightness(.65) drop-shadow(0 0 0 transparent) drop-shadow(0 0 0 transparent);
+    filter: brightness(1) drop-shadow(0 0 0 transparent) drop-shadow(0 0 0 transparent);
   }
 }
 
 @keyframes priority-halo {
   50% { opacity: .5; }
-  0%, 100% { opacity: 0; }
+  0%, 100% { opacity: .08; }
 }
 
 /* ---- Karşılama yazısı (daktilo) ----------------------------------------- */
