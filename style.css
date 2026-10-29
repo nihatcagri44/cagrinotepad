@@ -200,9 +200,8 @@ body.composing .mirror { visibility: hidden; }
 
 .priority-marker { position: relative; color: var(--priority-color); }
 .priority-glyph { opacity: 0; }
-.priority-marker::before,
-.priority-marker::after,
-.tool--priority::before {
+.mirror .priority-marker::before,
+.priority-marker::after {
   content: "";
   position: absolute;
   left: 50%;
@@ -212,15 +211,14 @@ body.composing .mirror { visibility: hidden; }
 }
 
 /* Işık halesi maskenin dışında kalır; satır ölçülerini değiştirmez. */
-.priority-marker::before,
-.tool--priority::before {
-  width: 3.4em;
-  height: 3.4em;
+.mirror .priority-marker::before {
+  width: 1.7em;
+  height: 1.7em;
   border-radius: 50%;
   background: radial-gradient(circle, #fff 0%, var(--priority-core) 10%, var(--priority-lit) 25%, var(--priority-glow) 36%, transparent 68%);
-  filter: drop-shadow(0 0 .3em var(--priority-lit)) drop-shadow(0 0 .55em var(--priority-glow));
+  filter: drop-shadow(0 0 .15em var(--priority-lit)) drop-shadow(0 0 .275em var(--priority-glow));
   opacity: 0;
-  animation: priority-halo var(--priority-speed) steps(1, end) infinite;
+  animation: priority-halo var(--priority-speed) ease-in-out infinite;
 }
 
 .priority-marker::after {
@@ -229,17 +227,20 @@ body.composing .mirror { visibility: hidden; }
   background: currentColor;
   -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath fill-rule='evenodd' d='M8.3 3a2 2 0 0 1 3.4 0l6 10.5a2 2 0 0 1-1.7 3H4a2 2 0 0 1-1.7-3ZM9.1 6v5h1.8V6Zm0 6.5v1.8h1.8v-1.8Z'/%3E%3C/svg%3E") center / contain no-repeat;
   mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath fill-rule='evenodd' d='M8.3 3a2 2 0 0 1 3.4 0l6 10.5a2 2 0 0 1-1.7 3H4a2 2 0 0 1-1.7-3ZM9.1 6v5h1.8V6Zm0 6.5v1.8h1.8v-1.8Z'/%3E%3C/svg%3E") center / contain no-repeat;
-  animation: priority-light var(--priority-speed) steps(1, end) infinite;
 }
 
-/* Işık merkezi ve hale %50 yoğunlukta yanıp söner. */
+.mirror .priority-marker::after {
+  animation: priority-light var(--priority-speed) ease-in-out infinite;
+}
+
+/* Yalnızca not metninde, %50 yoğunluğa yumuşakça çıkıp geri söner. */
 @keyframes priority-light {
-  0%, 48% {
+  50% {
     opacity: .5;
     color: var(--priority-core);
-    filter: brightness(1.8) drop-shadow(0 0 .2em #fff) drop-shadow(0 0 .65em var(--priority-lit));
+    filter: brightness(1.8) drop-shadow(0 0 .1em #fff) drop-shadow(0 0 .325em var(--priority-lit));
   }
-  49%, 100% {
+  0%, 100% {
     opacity: .02;
     color: var(--priority-color);
     filter: brightness(.65) drop-shadow(0 0 0 transparent) drop-shadow(0 0 0 transparent);
@@ -247,8 +248,8 @@ body.composing .mirror { visibility: hidden; }
 }
 
 @keyframes priority-halo {
-  0%, 48% { opacity: .5; }
-  49%, 100% { opacity: 0; }
+  50% { opacity: .5; }
+  0%, 100% { opacity: 0; }
 }
 
 /* ---- Karşılama yazısı (daktilo) ----------------------------------------- */
@@ -600,14 +601,12 @@ body.zen .status, body.zen .count { opacity: 0 !important; }
 }
 
 .priority-tools { display: flex; gap: .125rem; }
-.tool--priority { position: relative; }
 .tool--priority,
 .tool--priority:hover,
 .tool--priority:focus-visible,
 .tool--priority[aria-pressed="true"] { color: var(--priority-color); }
 .tool--priority:hover,
 .tool--priority[aria-pressed="true"] { background: var(--priority-wash); }
-.tool--priority svg { position: relative; animation: priority-light var(--priority-speed) steps(1, end) infinite; }
 .tool--priority svg > path:first-child { fill: var(--priority-wash); }
 
 /* Açık temada ay, karanlık temada güneş göster. */
@@ -684,5 +683,5 @@ body.ui-on .count { opacity: 1; visibility: visible; }
   #editor { display: none; }
   .mirror { overflow: visible; margin: 0; color: #000; }
   .priority-marker::before { display: none; }
-  .priority-marker::after { animation: none; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+  .mirror .priority-marker::after { animation: none; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
 }
